@@ -1,9 +1,9 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'dart:io';
 import '../widgets/scan_button.dart';
 
-class AnalysisResultScreen extends StatelessWidget {
+class AnalysisResultScreen extends StatefulWidget {
   final String analysis;
   final File scanImage;
   final ScanType scanType;
@@ -14,6 +14,52 @@ class AnalysisResultScreen extends StatelessWidget {
     required this.scanImage,
     required this.scanType,
   });
+
+  @override
+  State<AnalysisResultScreen> createState() => _AnalysisResultScreenState();
+}
+
+class _AnalysisResultScreenState extends State<AnalysisResultScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _typewriterController;
+  String _displayedText = '';
+  bool _isTypingComplete = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _typewriterController = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: widget.analysis.length * 20), // 20ms per character
+    );
+
+    _startTypewriter();
+  }
+
+  void _startTypewriter() {
+    _typewriterController.addListener(() {
+      final progress = _typewriterController.value;
+      final targetLength = (widget.analysis.length * progress).round();
+
+      if (mounted) {
+        setState(() {
+          _displayedText = widget.analysis.substring(0, targetLength);
+          if (targetLength >= widget.analysis.length) {
+            _isTypingComplete = true;
+          }
+        });
+      }
+    });
+
+    _typewriterController.forward();
+  }
+
+  @override
+  void dispose() {
+    _typewriterController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +85,6 @@ class AnalysisResultScreen extends StatelessWidget {
           IconButton(
             icon: Icon(Icons.share_rounded, color: Colors.white),
             onPressed: () {
-              // TODO: Implement share functionality
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text('Share feature coming soon!'),
@@ -60,7 +105,11 @@ class AnalysisResultScreen extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF0D47A1), Color(0xFF1976D2), Color(0xFF42A5F5)],
+            colors: [
+              Color(0xFF0D47A1),
+              Color(0xFF1976D2),
+              Color(0xFF42A5F5),
+            ],
             stops: [0.0, 0.5, 1.0],
           ),
         ),
@@ -74,17 +123,14 @@ class AnalysisResultScreen extends StatelessWidget {
                 children: [
                   SizedBox(height: 20),
 
-                  // Scan Type Badge
                   _buildScanTypeBadge(),
 
                   SizedBox(height: 16),
 
-                  // Image Preview Card
                   _buildImageCard(),
 
                   SizedBox(height: 24),
 
-                  // Analysis Report Section
                   _buildSectionTitle('AI Analysis Report'),
 
                   SizedBox(height: 16),
@@ -93,12 +139,10 @@ class AnalysisResultScreen extends StatelessWidget {
 
                   SizedBox(height: 24),
 
-                  // Disclaimer
                   _buildDisclaimerCard(),
 
                   SizedBox(height: 20),
 
-                  // Action Buttons
                   _buildActionButtons(context),
 
                   SizedBox(height: 20),
@@ -153,23 +197,29 @@ class AnalysisResultScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.15),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.3),
+          width: 1.5,
+        ),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
         child: Column(
           children: [
-            // Image
             Container(
               height: 280,
               width: double.infinity,
               color: Colors.black12,
-              child: Image.file(scanImage, fit: BoxFit.cover),
+              child: Image.file(
+                widget.scanImage,
+                fit: BoxFit.cover,
+              ),
             ),
-            // Image Info Bar
             Container(
               padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.1)),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+              ),
               child: Row(
                 children: [
                   Icon(
@@ -193,7 +243,9 @@ class AnalysisResultScreen extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: Colors.green.withOpacity(0.3),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.green.withOpacity(0.5)),
+                      border: Border.all(
+                        color: Colors.green.withOpacity(0.5),
+                      ),
                     ),
                     child: Text(
                       'Analyzed',
@@ -225,7 +277,11 @@ class AnalysisResultScreen extends StatelessWidget {
           ),
         ),
         SizedBox(width: 12),
-        Icon(Icons.description_rounded, color: Colors.white, size: 22),
+        Icon(
+          Icons.description_rounded,
+          color: Colors.white,
+          size: 22,
+        ),
         SizedBox(width: 10),
         Text(
           title,
@@ -253,7 +309,10 @@ class AnalysisResultScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.15),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.3),
+          width: 1.5,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -295,39 +354,146 @@ class AnalysisResultScreen extends StatelessWidget {
                   ],
                 ),
               ),
+              if (!_isTypingComplete)
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                ),
             ],
           ),
           SizedBox(height: 16),
-          Divider(color: Colors.white.withOpacity(0.3), thickness: 1),
+          Divider(
+            color: Colors.white.withOpacity(0.3),
+            thickness: 1,
+          ),
           SizedBox(height: 16),
-          // Use Markdown widget
-          MarkdownBody(
-            data: analysis,
-            styleSheet: MarkdownStyleSheet(
-              p: TextStyle(
-                fontSize: 15,
-                height: 1.6,
-                color: Colors.white.withOpacity(0.95),
-                letterSpacing: 0.3,
-              ),
-              strong: TextStyle(
-                fontSize: 15,
-                height: 1.6,
-                color: Colors.white,
-                letterSpacing: 0.3,
-                fontWeight: FontWeight.bold,
-              ),
-              h2: TextStyle(
-                fontSize: 17,
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-              listBullet: TextStyle(color: Colors.white.withOpacity(0.95)),
+          RichText(
+            text: TextSpan(
+              children: [
+                ..._parseFormattedText(_displayedText),
+                if (!_isTypingComplete)
+                  WidgetSpan(
+                    child: _buildCursor(),
+                  ),
+              ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildCursor() {
+    return AnimatedBuilder(
+      animation: _typewriterController,
+      builder: (context, child) {
+        return Opacity(
+          opacity: (sin(_typewriterController.value * 2 * pi * 3) + 1) / 2,
+          child: Container(
+            width: 8,
+            height: 16,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  List<TextSpan> _parseFormattedText(String text) {
+    final List<TextSpan> spans = [];
+    final lines = text.split('\n');
+
+    for (int i = 0; i < lines.length; i++) {
+      String line = lines[i];
+
+      if (line.startsWith('##')) {
+        final headingText = line.replaceFirst(RegExp(r'^#+\s*'), '');
+        spans.add(
+          TextSpan(
+            text: headingText + '\n',
+            style: TextStyle(
+              fontSize: 17,
+              height: 1.8,
+              color: Colors.white,
+              letterSpacing: 0.5,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        );
+        continue;
+      }
+
+      int currentIndex = 0;
+      final boldPattern = RegExp(r'\*\*\*?(.*?)\*\*\*?');
+
+      for (final match in boldPattern.allMatches(line)) {
+        if (match.start > currentIndex) {
+          spans.add(
+            TextSpan(
+              text: line.substring(currentIndex, match.start),
+              style: TextStyle(
+                fontSize: 15,
+                height: 1.6,
+                color: Colors.white.withOpacity(0.95),
+                letterSpacing: 0.3,
+              ),
+            ),
+          );
+        }
+
+        spans.add(
+          TextSpan(
+            text: match.group(1),
+            style: TextStyle(
+              fontSize: 15,
+              height: 1.6,
+              color: Colors.white,
+              letterSpacing: 0.3,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        );
+
+        currentIndex = match.end;
+      }
+
+      if (currentIndex < line.length) {
+        spans.add(
+          TextSpan(
+            text: line.substring(currentIndex),
+            style: TextStyle(
+              fontSize: 15,
+              height: 1.6,
+              color: Colors.white.withOpacity(0.95),
+              letterSpacing: 0.3,
+            ),
+          ),
+        );
+      }
+
+      if (i < lines.length - 1) {
+        spans.add(
+          TextSpan(
+            text: '\n',
+            style: TextStyle(
+              fontSize: 15,
+              height: 1.6,
+              color: Colors.white.withOpacity(0.95),
+              letterSpacing: 0.3,
+            ),
+          ),
+        );
+      }
+    }
+
+    return spans;
   }
 
   Widget _buildDisclaimerCard() {
@@ -361,7 +527,11 @@ class AnalysisResultScreen extends StatelessWidget {
               color: Colors.white.withOpacity(0.2),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(Icons.warning_rounded, color: Colors.white, size: 24),
+            child: Icon(
+              Icons.warning_rounded,
+              color: Colors.white,
+              size: 24,
+            ),
           ),
           SizedBox(width: 12),
           Expanded(
@@ -401,7 +571,6 @@ class AnalysisResultScreen extends StatelessWidget {
             color: Colors.transparent,
             child: InkWell(
               onTap: () {
-                // Go back to home (pop twice)
                 Navigator.popUntil(context, (route) => route.isFirst);
               },
               borderRadius: BorderRadius.circular(12),
@@ -440,7 +609,6 @@ class AnalysisResultScreen extends StatelessWidget {
             color: Colors.transparent,
             child: InkWell(
               onTap: () {
-                // Go back to scan selector
                 Navigator.pop(context);
               },
               borderRadius: BorderRadius.circular(12),
@@ -483,7 +651,7 @@ class AnalysisResultScreen extends StatelessWidget {
   }
 
   String _getScanTypeName() {
-    switch (scanType) {
+    switch (widget.scanType) {
       case ScanType.ct:
         return 'CT Scan';
       case ScanType.mri:
@@ -494,7 +662,7 @@ class AnalysisResultScreen extends StatelessWidget {
   }
 
   IconData _getScanTypeIcon() {
-    switch (scanType) {
+    switch (widget.scanType) {
       case ScanType.ct:
         return Icons.medical_services_rounded;
       case ScanType.mri:
@@ -505,7 +673,7 @@ class AnalysisResultScreen extends StatelessWidget {
   }
 
   List<Color> _getScanTypeGradient() {
-    switch (scanType) {
+    switch (widget.scanType) {
       case ScanType.ct:
         return [Color(0xFF6A1B9A), Color(0xFF8E24AA)];
       case ScanType.mri:
@@ -513,63 +681,5 @@ class AnalysisResultScreen extends StatelessWidget {
       case ScanType.xray:
         return [Color(0xFFD84315), Color(0xFFFF5722)];
     }
-  }
-
-  /// Parse text with ***bold*** markdown and return formatted TextSpans
-  List<TextSpan> _parseFormattedText(String text) {
-    final List<TextSpan> spans = [];
-    final RegExp boldPattern = RegExp(r'\*\*\*(.*?)\*\*\*');
-
-    int currentIndex = 0;
-
-    for (final match in boldPattern.allMatches(text)) {
-      // Add normal text before the bold text
-      if (match.start > currentIndex) {
-        spans.add(
-          TextSpan(
-            text: text.substring(currentIndex, match.start),
-            style: TextStyle(
-              fontSize: 15,
-              height: 1.6,
-              color: Colors.white.withOpacity(0.95),
-              letterSpacing: 0.3,
-            ),
-          ),
-        );
-      }
-
-      // Add bold text
-      spans.add(
-        TextSpan(
-          text: match.group(1), // Text without the ***
-          style: TextStyle(
-            fontSize: 15,
-            height: 1.6,
-            color: Colors.white,
-            letterSpacing: 0.3,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      );
-
-      currentIndex = match.end;
-    }
-
-    // Add remaining normal text
-    if (currentIndex < text.length) {
-      spans.add(
-        TextSpan(
-          text: text.substring(currentIndex),
-          style: TextStyle(
-            fontSize: 15,
-            height: 1.6,
-            color: Colors.white.withOpacity(0.95),
-            letterSpacing: 0.3,
-          ),
-        ),
-      );
-    }
-
-    return spans;
   }
 }
