@@ -1,13 +1,14 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'dart:io';
+import 'package:share_plus/share_plus.dart';
+import '../services/create_pdf_service.dart';
 import '../widgets/scan_button.dart';
 
 class AnalysisResultScreen extends StatefulWidget {
   final String analysis;
   final File scanImage;
   final ScanType scanType;
-
   const AnalysisResultScreen({
     super.key,
     required this.analysis,
@@ -24,6 +25,7 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
   late AnimationController _typewriterController;
   String _displayedText = '';
   bool _isTypingComplete = false;
+  bool _isGeneratingPdf = false;
 
   @override
   void initState() {
@@ -31,7 +33,7 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
 
     _typewriterController = AnimationController(
       vsync: this,
-      duration: Duration(milliseconds: widget.analysis.length * 20), // 20ms per character
+      duration: Duration(milliseconds: widget.analysis.length * 20),
     );
 
     _startTypewriter();
@@ -53,6 +55,82 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
     });
 
     _typewriterController.forward();
+  }
+
+  Future<void> _shareReport() async {
+    setState(() {
+      _isGeneratingPdf = true;
+    });
+
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            padding: EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text(
+                  'Generating PDF Report...',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      final pdfFile = await PdfService.generateAnalysisReport(
+        imageFile: widget.scanImage,
+        analysis: widget.analysis,
+        scanType: _getScanTypeName(),
+      );
+
+      if (mounted) {
+        Navigator.pop(context);
+      }
+
+      await Share.shareXFiles(
+        [XFile(pdfFile.path)],
+        subject: 'MedScan Analysis Report - ${_getScanTypeName()}',
+        text: 'Here is my medical scan analysis report from MedScan AI.',
+      );
+    } catch (e) {
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to generate PDF: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isGeneratingPdf = false;
+        });
+      }
+    }
   }
 
   @override
@@ -84,17 +162,7 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
         actions: [
           IconButton(
             icon: Icon(Icons.share_rounded, color: Colors.white),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Share feature coming soon!'),
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              );
-            },
+            onPressed: _isGeneratingPdf ? null : _shareReport,
           ),
         ],
       ),
@@ -122,29 +190,17 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   SizedBox(height: 20),
-
                   _buildScanTypeBadge(),
-
                   SizedBox(height: 16),
-
                   _buildImageCard(),
-
                   SizedBox(height: 24),
-
                   _buildSectionTitle('AI Analysis Report'),
-
                   SizedBox(height: 16),
-
                   _buildAnalysisCard(),
-
                   SizedBox(height: 24),
-
                   _buildDisclaimerCard(),
-
                   SizedBox(height: 20),
-
                   _buildActionButtons(context),
-
                   SizedBox(height: 20),
                 ],
               ),
