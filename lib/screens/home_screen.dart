@@ -1,8 +1,32 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:medscan/widgets/scan_button.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: Duration(seconds: 3),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +72,6 @@ class HomeScreen extends StatelessWidget {
                   _buildHeroSection(),
                   SizedBox(height: 40),
 
-                  // Scan Options Title
                   Row(
                     children: [
                       Container(
@@ -87,7 +110,6 @@ class HomeScreen extends StatelessWidget {
 
                   SizedBox(height: 20),
 
-                  // Use ScanButton widgets
                   ScanButton(
                     title: 'CT Scan',
                     subtitle: 'Computed Tomography',
@@ -125,70 +147,134 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildHeroSection() {
-    return Container(
-      padding: EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.3),
-          width: 1.5,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return AnimatedBuilder(
+      animation: _animationController,
+      builder: (context, child) {
+        final offsetY = sin(_animationController.value * 2 * pi) * 5;
+
+        return Transform.translate(
+          offset: Offset(0, offsetY),
+          child: Stack(
             children: [
               Container(
-                padding: EdgeInsets.all(12),
+                padding: EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.white.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.3),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.white.withOpacity(0.1),
+                      blurRadius: 20,
+                      offset: Offset(0, 10),
+                    ),
+                  ],
                 ),
-                child: Icon(
-                  Icons.health_and_safety_rounded,
-                  color: Colors.white,
-                  size: 30,
-                ),
-              ),
-              SizedBox(width: 15),
-              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'AI-Powered Analysis',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
+                    Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            Icons.health_and_safety_rounded,
+                            color: Colors.white,
+                            size: 30,
+                          ),
+                        ),
+                        SizedBox(width: 15),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'AI-Powered Analysis',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                'Instant medical scan insights',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.white.withOpacity(0.9),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                    SizedBox(height: 4),
+                    SizedBox(height: 15),
                     Text(
-                      'Instant medical scan insights',
+                      'Upload your medical scan images and receive detailed AI-powered analysis in seconds.',
                       style: TextStyle(
                         fontSize: 14,
-                        color: Colors.white.withOpacity(0.9),
+                        color: Colors.white.withOpacity(0.95),
+                        height: 1.5,
                       ),
                     ),
                   ],
                 ),
               ),
+              Positioned(
+                top: 10,
+                right: 10,
+                child: _buildSparkle(_animationController),
+              ),
+              Positioned(
+                bottom: 10,
+                left: 10,
+                child: _buildSparkle(
+                  _animationController,
+                  reverse: true,
+                ),
+              ),
+              Positioned(
+                top: 50,
+                left: 30,
+                child: _buildSparkle(
+                  _animationController,
+                  delay: 0.5,
+                ),
+              ),
             ],
           ),
-          SizedBox(height: 15),
-          Text(
-            'Upload your medical scan images and receive detailed AI-powered analysis in seconds.',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.white.withOpacity(0.95),
-              height: 1.5,
+        );
+      },
+    );
+  }
+
+  Widget _buildSparkle(AnimationController controller, {bool reverse = false, double delay = 0.0}) {
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, child) {
+        double value = (controller.value + delay) % 1.0;
+        if (reverse) value = 1.0 - value;
+
+        return Opacity(
+          opacity: (sin(value * 2 * pi) + 1) / 2,
+          child: Transform.scale(
+            scale: 0.5 + ((sin(value * 2 * pi) + 1) / 2) * 0.5,
+            child: Icon(
+              Icons.auto_awesome_rounded,
+              color: Colors.amber,
+              size: 16,
             ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
