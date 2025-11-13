@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:share_plus/share_plus.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import '../services/create_pdf_service.dart';
 import '../widgets/scan_button.dart';
 
@@ -20,12 +21,18 @@ class AnalysisResultScreen extends StatefulWidget {
   State<AnalysisResultScreen> createState() => _AnalysisResultScreenState();
 }
 
+enum TtsState { playing, stopped }
+
 class _AnalysisResultScreenState extends State<AnalysisResultScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _typewriterController;
   String _displayedText = '';
   bool _isTypingComplete = false;
   bool _isGeneratingPdf = false;
+
+  // TTS variables
+  late FlutterTts flutterTts;
+  TtsState ttsState = TtsState.stopped;
 
   @override
   void initState() {
@@ -37,7 +44,144 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
     );
 
     _startTypewriter();
+    _initTts();
   }
+
+  void _initTts() async {
+    flutterTts = FlutterTts();
+
+    try {
+      await flutterTts.awaitSpeakCompletion(true);
+
+      flutterTts.setStartHandler(() {
+        if (mounted) {
+          setState(() {
+            ttsState = TtsState.playing;
+          });
+        }
+      });
+
+      flutterTts.setCompletionHandler(() {
+        if (mounted) {
+          setState(() {
+            ttsState = TtsState.stopped;
+          });
+        }
+      });
+
+      flutterTts.setErrorHandler((msg) {
+        if (mounted) {
+          setState(() {
+            ttsState = TtsState.stopped;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('TTS Error: $msg'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      });
+
+      flutterTts.setCancelHandler(() {
+        if (mounted) {
+          setState(() {
+            ttsState = TtsState.stopped;
+          });
+        }
+      });
+
+      await flutterTts.setLanguage("en-US");
+      await flutterTts.setSpeechRate(0.5);
+      await flutterTts.setVolume(1.0);
+      await flutterTts.setPitch(1.0);
+
+      if (Platform.isAndroid) {
+        await flutterTts.setEngine("com.google.android.tts");
+      }
+
+      print("TTS initialized successfully");
+    } catch (e) {
+      print("TTS initialization error: $e");
+    }
+  }
+
+  String _cleanTextForSpeech(String text) {
+    String cleanedText = text
+        .replaceAll(RegExp(r'##\s*'), '')
+        .replaceAll(RegExp(r'\*\*\*'), '')
+        .replaceAll(RegExp(r'\*\*'), '')
+        .replaceAll(RegExp(r'\*'), '')
+        .replaceAll(RegExp(r'#{1,6}\s*'), '');
+
+    return cleanedText.trim();
+  }
+
+  Future<void> _speak() async {
+    if (_displayedText.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No text to read'),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+      return;
+    }
+
+    try {
+      if (ttsState == TtsState.playing) {
+        // Stop the speech - no result checking needed
+        await flutterTts.stop();
+        if (mounted) {
+          setState(() {
+            ttsState = TtsState.stopped;
+          });
+        }
+        print("TTS stopped");
+      } else {
+        // Start speaking - check result
+        String textToSpeak = _cleanTextForSpeech(_displayedText);
+        var result = await flutterTts.speak(textToSpeak);
+
+        if (result == 1) {
+          print("TTS started successfully");
+        } else {
+          print("TTS failed to start - result: $result");
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to start text-to-speech'),
+                backgroundColor: Colors.red,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      print("TTS error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('TTS Error: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
 
   void _startTypewriter() {
     _typewriterController.addListener(() {
@@ -136,6 +280,7 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
   @override
   void dispose() {
     _typewriterController.dispose();
+    flutterTts.stop();
     super.dispose();
   }
 
@@ -419,6 +564,10 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
                     valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                   ),
                 ),
+              if (_isTypingComplete) ...[
+                SizedBox(width: 8),
+                _buildVoiceControls(),
+              ],
             ],
           ),
           SizedBox(height: 16),
@@ -439,6 +588,38 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildVoiceControls() {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _speak,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: ttsState == TtsState.playing
+                ? Colors.amber.withOpacity(0.3)
+                : Colors.white.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: ttsState == TtsState.playing
+                  ? Colors.amber
+                  : Colors.white.withOpacity(0.3),
+              width: 1.5,
+            ),
+          ),
+          child: Icon(
+            ttsState == TtsState.playing
+                ? Icons.stop_rounded
+                : Icons.volume_up_rounded,
+            color: Colors.white,
+            size: 20,
+          ),
+        ),
       ),
     );
   }
