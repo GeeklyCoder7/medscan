@@ -32,6 +32,8 @@
             android:value="2" />
     </application>
     <!-- Camera permission -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.CAMERA"/>
 
     <!-- Storage permissions for different Android versions -->
