@@ -1,9 +1,11 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:medscan/config/api_config.dart';
 import 'dart:io';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import '../services/create_pdf_service.dart';
+import '../services/gemini_service.dart';
 import '../widgets/scan_button.dart';
 
 class AnalysisResultScreen extends StatefulWidget {
@@ -33,6 +35,10 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
   // TTS variables
   late FlutterTts flutterTts;
   TtsState ttsState = TtsState.stopped;
+
+  // Summary variables
+  bool _isGeneratingSummary = false;
+  String? _cachedSummary;
 
   @override
   void initState() {
@@ -134,7 +140,7 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
 
     try {
       if (ttsState == TtsState.playing) {
-        // Stop the speech - no result checking needed
+        // Stop the speech
         await flutterTts.stop();
         if (mounted) {
           setState(() {
@@ -143,7 +149,7 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
         }
         print("TTS stopped");
       } else {
-        // Start speaking - check result
+        // Start speaking
         String textToSpeak = _cleanTextForSpeech(_displayedText);
         var result = await flutterTts.speak(textToSpeak);
 
@@ -182,6 +188,257 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
     }
   }
 
+  Future<void> _generateSummary() async {
+    // If summary already exists, show it
+    if (_cachedSummary != null) {
+      _showSummaryDialog(_cachedSummary!);
+      return;
+    }
+
+    setState(() {
+      _isGeneratingSummary = true;
+    });
+
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Color(0xFF0D47A1).withOpacity(0.95),
+                Color(0xFF1976D2).withOpacity(0.95),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.3),
+              width: 1.5,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+              SizedBox(height: 20),
+              Text(
+                'Generating Summary...',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Please wait',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.white.withOpacity(0.8),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    try {
+      final summaryPrompt = '''
+Summarize the following medical scan analysis in 200-300 words using simple, easy-to-understand language that a non-medical person can comprehend. Focus on:
+- What was found in the scan
+- Whether findings are normal or concerning
+- Key takeaways for the patient
+- Any recommendations
+
+Analysis to summarize:
+${widget.analysis}
+
+Provide a clear, concise summary in plain English without medical jargon.
+''';
+
+      // Get API key from your config
+      final apiKey = ApiConfig.geminiApiKey;
+      final geminiService = GeminiService(apiKey);
+
+      final summary = await geminiService.analyzeMedicalScanWithCustomPrompt(
+        imageBytes: await widget.scanImage.readAsBytes(),
+        customPrompt: summaryPrompt,
+      );
+
+      setState(() {
+        _cachedSummary = summary;
+        _isGeneratingSummary = false;
+      });
+
+      if (mounted) {
+        Navigator.pop(context); // Close loading dialog
+        _showSummaryDialog(summary);
+      }
+    } catch (e) {
+      setState(() {
+        _isGeneratingSummary = false;
+      });
+
+      if (mounted) {
+        Navigator.pop(context); // Close loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to generate summary: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  void _showSummaryDialog(String summary) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.7,
+          ),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF0D47A1).withOpacity(0.98),
+                Color(0xFF1976D2).withOpacity(0.98),
+                Color(0xFF42A5F5).withOpacity(0.98),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.3),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 20,
+                offset: Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Container(
+                padding: EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(24),
+                    topRight: Radius.circular(24),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        Icons.summarize_rounded,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Quick Summary',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          Text(
+                            'Easy-to-understand overview',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.white.withOpacity(0.8),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.close_rounded, color: Colors.white),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              // Content with formatted text
+              Flexible(
+                child: SingleChildScrollView(
+                  physics: BouncingScrollPhysics(),
+                  padding: EdgeInsets.all(24),
+                  child: RichText(
+                    text: TextSpan(
+                      children: _parseFormattedText(summary),
+                    ),
+                  ),
+                ),
+              ),
+              // Footer
+              Container(
+                padding: EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(24),
+                    bottomRight: Radius.circular(24),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline_rounded,
+                      color: Colors.amber,
+                      size: 18,
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'This is a simplified overview. Read full report for details.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white.withOpacity(0.9),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   void _startTypewriter() {
     _typewriterController.addListener(() {
@@ -225,10 +482,7 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
                 SizedBox(height: 16),
                 Text(
                   'Generating PDF Report...',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                 ),
               ],
             ),
@@ -318,11 +572,7 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF0D47A1),
-              Color(0xFF1976D2),
-              Color(0xFF42A5F5),
-            ],
+            colors: [Color(0xFF0D47A1), Color(0xFF1976D2), Color(0xFF42A5F5)],
             stops: [0.0, 0.5, 1.0],
           ),
         ),
@@ -398,10 +648,7 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.15),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.3),
-          width: 1.5,
-        ),
+        border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
@@ -411,16 +658,11 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
               height: 280,
               width: double.infinity,
               color: Colors.black12,
-              child: Image.file(
-                widget.scanImage,
-                fit: BoxFit.cover,
-              ),
+              child: Image.file(widget.scanImage, fit: BoxFit.cover),
             ),
             Container(
               padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-              ),
+              decoration: BoxDecoration(color: Colors.white.withOpacity(0.1)),
               child: Row(
                 children: [
                   Icon(
@@ -444,9 +686,7 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
                     decoration: BoxDecoration(
                       color: Colors.green.withOpacity(0.3),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: Colors.green.withOpacity(0.5),
-                      ),
+                      border: Border.all(color: Colors.green.withOpacity(0.5)),
                     ),
                     child: Text(
                       'Analyzed',
@@ -478,11 +718,7 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
           ),
         ),
         SizedBox(width: 12),
-        Icon(
-          Icons.description_rounded,
-          color: Colors.white,
-          size: 22,
-        ),
+        Icon(Icons.description_rounded, color: Colors.white, size: 22),
         SizedBox(width: 10),
         Text(
           title,
@@ -510,10 +746,7 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.15),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.3),
-          width: 1.5,
-        ),
+        border: Border.all(color: Colors.white.withOpacity(0.3), width: 1.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -571,19 +804,13 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
             ],
           ),
           SizedBox(height: 16),
-          Divider(
-            color: Colors.white.withOpacity(0.3),
-            thickness: 1,
-          ),
+          Divider(color: Colors.white.withOpacity(0.3), thickness: 1),
           SizedBox(height: 16),
           RichText(
             text: TextSpan(
               children: [
                 ..._parseFormattedText(_displayedText),
-                if (!_isTypingComplete)
-                  WidgetSpan(
-                    child: _buildCursor(),
-                  ),
+                if (!_isTypingComplete) WidgetSpan(child: _buildCursor()),
               ],
             ),
           ),
@@ -593,34 +820,69 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
   }
 
   Widget _buildVoiceControls() {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: _speak,
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: ttsState == TtsState.playing
-                ? Colors.amber.withOpacity(0.3)
-                : Colors.white.withOpacity(0.2),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Voice Control Button
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: _speak,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: ttsState == TtsState.playing
-                  ? Colors.amber
-                  : Colors.white.withOpacity(0.3),
-              width: 1.5,
+            child: Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: ttsState == TtsState.playing
+                    ? Colors.amber.withOpacity(0.3)
+                    : Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: ttsState == TtsState.playing
+                      ? Colors.amber
+                      : Colors.white.withOpacity(0.3),
+                  width: 1.5,
+                ),
+              ),
+              child: Icon(
+                ttsState == TtsState.playing
+                    ? Icons.stop_rounded
+                    : Icons.volume_up_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
             ),
           ),
-          child: Icon(
-            ttsState == TtsState.playing
-                ? Icons.stop_rounded
-                : Icons.volume_up_rounded,
-            color: Colors.white,
-            size: 20,
+        ),
+        SizedBox(width: 8),
+        // Summary Button
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: _isGeneratingSummary ? null : _generateSummary,
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: _cachedSummary != null
+                    ? Colors.green.withOpacity(0.3)
+                    : Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: _cachedSummary != null
+                      ? Colors.green
+                      : Colors.white.withOpacity(0.3),
+                  width: 1.5,
+                ),
+              ),
+              child: Icon(
+                Icons.summarize_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
           ),
         ),
-      ),
+      ],
     );
   }
 
@@ -764,11 +1026,7 @@ class _AnalysisResultScreenState extends State<AnalysisResultScreen>
               color: Colors.white.withOpacity(0.2),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(
-              Icons.warning_rounded,
-              color: Colors.white,
-              size: 24,
-            ),
+            child: Icon(Icons.warning_rounded, color: Colors.white, size: 24),
           ),
           SizedBox(width: 12),
           Expanded(
